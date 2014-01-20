@@ -28,8 +28,8 @@ class ClientProxy(val client: Service[RpcRequest, RpcResponse],
     val request = new RpcRequest(method.getName, serviceId, args, method.getParameterTypes)
 
     val responseF = client(request) map { (response) =>
-      if (response.isFailed) {
-        response.getResponse match {
+      if (response.failed) {
+        response.response match {
           case exception: Exception =>
             throw exception
           case r =>
@@ -39,7 +39,7 @@ class ClientProxy(val client: Service[RpcRequest, RpcResponse],
         }
       }
 
-      response.getResponse
+      response.response
     }
 
     if (method.getReturnType.isAssignableFrom(classOf[Future[_]])) {
