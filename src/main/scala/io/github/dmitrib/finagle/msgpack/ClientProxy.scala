@@ -25,7 +25,9 @@ object ClientProxy {
 class ClientProxy(val client: Service[RpcRequest, RpcResponse],
                   serviceId: String) extends InvocationHandler {
   def invoke(proxy: scala.Any, method: Method, args: Array[AnyRef]): AnyRef = {
-    val request = new RpcRequest(method.getName, serviceId, args, method.getParameterTypes)
+    //TODO: separate method signature types and args types
+    val paramTypes = args.map(_.getClass)
+    val request = new RpcRequest(method.getName, serviceId, args, paramTypes)
 
     val responseF = client(request) map { (response) =>
       if (response.failed) {
@@ -33,7 +35,7 @@ class ClientProxy(val client: Service[RpcRequest, RpcResponse],
           case exception: Exception =>
             throw exception
           case r =>
-            throw new RuntimeException(
+            throw new RpcException(
               s"response is marked as failed but response is not exception but ${r.getClass}"
             )
         }

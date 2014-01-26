@@ -41,7 +41,7 @@ class RpcServer(val handlers: Map[String, AnyRef],
       } catch {
         case e: Exception => {
           log.debug(s"RPC.exception ${request.callId} -> $e")
-          new RpcResponse(e, failed=true)
+          new RpcResponse(ExceptionTransportWrapper(e), failed=true)
         }
       }
     }

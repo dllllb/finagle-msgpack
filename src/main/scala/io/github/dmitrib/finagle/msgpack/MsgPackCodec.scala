@@ -5,12 +5,42 @@ import org.jboss.netty.channel._
 import org.jboss.netty.handler.codec.oneone.OneToOneEncoder
 import org.jboss.netty.buffer.{ChannelBuffer, ChannelBuffers}
 import org.msgpack.{MessagePackable, MessagePack}
-import org.jboss.netty.handler.codec.frame.FrameDecoder
+import org.jboss.netty.handler.codec.frame.LengthFieldBasedFrameDecoder
 import org.msgpack.annotation.Message
 import org.msgpack.unpacker.Unpacker
 import org.msgpack.packer.Packer
-import java.util
-import scala.util.hashing.MurmurHash3
+
+@Message
+case class ExceptionTransportWrapper(var exception: Exception) extends MessagePackable {
+  //TODO: transfer stack trace
+
+  //for msgpack serialization
+  def this() = this(null)
+
+  def readFrom(u: Unpacker) {
+    val exClassStr = u.readString()
+    val msg = u.readString()
+
+    val exClass = try {
+      Class.forName(exClassStr)
+    } catch {
+      case e: Exception => throw {
+        new RpcException("can't deserialize message", e)
+      }
+    }
+
+    exception = (if (msg != null) {
+      exClass.getConstructor(classOf[String]).newInstance(msg)
+    } else {
+      exClass.newInstance()
+    }).asInstanceOf[Exception]
+  }
+
+  def writeTo(pk: Packer) {
+    pk.write(exception.getClass.toString)
+    pk.write(exception.getMessage)
+  }
+}
 
 @Message
 case class RpcRequest(var method: String,
@@ -86,28 +116,21 @@ case class RpcResponse(var response: AnyRef, var failed: Boolean) extends Messag
   }
 }
 
-class MsgPackDecoder extends FrameDecoder {
+class MsgPackDecoder(val msgClass: Class[_]) extends LengthFieldBasedFrameDecoder(Int.MaxValue, 0, 4, 0, 4) {
   val msgpack = new MessagePack
 
-  def decode(ctx: ChannelHandlerContext, channel: Channel, buf: ChannelBuffer): AnyRef = {
-    if (buf.readableBytes() < 4) {
+
+  override def decode(ctx: ChannelHandlerContext, channel: Channel, buffer: ChannelBuffer): AnyRef = {
+    val buf = super.decode(ctx, channel, buffer).asInstanceOf[ChannelBuffer]
+
+    if (buf == null) {
       return null
     }
 
-    buf.markReaderIndex()
-    val msgLen = buf.readInt()
-
-
-    if (buf.readableBytes() < msgLen) {
-      buf.resetReaderIndex()
-      return null
-    }
-
-    val msgBuf = new Array[Byte](msgLen)
-    buf.readBytes(msgLen)
-    //TODO: use msgpack unpacker
-    val value = msgpack.read(msgBuf)
-    value
+    val msgBuf = new Array[Byte](buf.readableBytes())
+    buf.readBytes(msgBuf)
+    val value = msgpack.read(msgBuf, msgClass)
+    value.asInstanceOf[AnyRef]
   }
 }
 
@@ -115,7 +138,6 @@ class MsgPackEncoder extends OneToOneEncoder {
   val msgpack = new MessagePack
 
   def encode(ctx: ChannelHandlerContext, channel: Channel, msg: scala.Any): AnyRef = {
-    //TODO: use msgpack packer
     val bytes = msgpack.write(msg)
 
     val msgLenBuf = ChannelBuffers.buffer(4)
@@ -134,8 +156,8 @@ class MsgPackCodec extends CodecFactory[RpcRequest, RpcResponse] {
       def pipelineFactory = new ChannelPipelineFactory {
         def getPipeline = {
           val pipeline = Channels.pipeline()
-          pipeline.addLast("decoder", new MsgPackDecoder)
-          pipeline.addLast("encoder", new MsgPackEncoder)
+          pipeline.addLast("response-decoder", new MsgPackDecoder(classOf[RpcResponse]))
+          pipeline.addLast("request-encoder", new MsgPackEncoder)
           pipeline
         }
       }
@@ -147,8 +169,8 @@ class MsgPackCodec extends CodecFactory[RpcRequest, RpcResponse] {
       def pipelineFactory = new ChannelPipelineFactory {
         def getPipeline = {
           val pipeline = Channels.pipeline()
-          pipeline.addLast("decoder", new MsgPackDecoder)
-          pipeline.addLast("encoder", new MsgPackEncoder)
+          pipeline.addLast("request-decoder", new MsgPackDecoder(classOf[RpcRequest]))
+          pipeline.addLast("response-encoder", new MsgPackEncoder)
           pipeline
         }
       }
