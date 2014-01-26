@@ -12,8 +12,6 @@ import org.msgpack.packer.Packer
 
 @Message
 case class ExceptionTransportWrapper(var exception: Exception) extends MessagePackable {
-  //TODO: transfer stack trace
-
   //for msgpack serialization
   def this() = this(null)
 

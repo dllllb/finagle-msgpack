@@ -9,7 +9,6 @@ object ClientProxy {
   def apply[T](client: Service[RpcRequest, RpcResponse],
                id: String,
                interface: Class[T]): T = {
-    //TODO: make call to check that the service with requested id exists on server
     val proxy = new ClientProxy(client, id)
     java.lang.reflect.Proxy.newProxyInstance(
       interface.getClassLoader,
@@ -25,7 +24,6 @@ object ClientProxy {
 class ClientProxy(val client: Service[RpcRequest, RpcResponse],
                   serviceId: String) extends InvocationHandler {
   def invoke(proxy: scala.Any, method: Method, args: Array[AnyRef]): AnyRef = {
-    //TODO: separate method signature types and args types
     val paramTypes = args.map(_.getClass)
     val request = new RpcRequest(method.getName, serviceId, args, paramTypes)
 
