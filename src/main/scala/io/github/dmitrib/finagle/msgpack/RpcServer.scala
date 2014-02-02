@@ -25,7 +25,7 @@ class RpcServer(val handlers: Map[String, AnyRef],
         )
 
         val method = try {
-          handler.getClass.getMethod(request.method, request.paramTypes:_*)
+          handler.getClass.getMethod(request.method, request.signature:_*)
         } catch {
           case e: Exception => {
             throw new RpcException(

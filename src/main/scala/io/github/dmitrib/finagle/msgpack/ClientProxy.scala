@@ -4,6 +4,7 @@ import java.lang.reflect.{Method, InvocationHandler}
 import com.twitter.util.Await
 import com.twitter.finagle.Service
 import com.twitter.util.Future
+import scala.Option
 
 object ClientProxy {
   def apply[T](client: Service[RpcRequest, RpcResponse],
@@ -24,18 +25,21 @@ object ClientProxy {
 class ClientProxy(val client: Service[RpcRequest, RpcResponse],
                   serviceId: String) extends InvocationHandler {
   def invoke(proxy: scala.Any, method: Method, args: Array[AnyRef]): AnyRef = {
-    val paramTypes = args.map(_.getClass)
-    val request = new RpcRequest(method.getName, serviceId, args, paramTypes)
+    val safeArgs = Option(args).getOrElse(Array.empty)
+    val signature = method.getParameterTypes
+    val request = new RpcRequest(method.getName, serviceId, safeArgs, signature)
 
     val responseF = client(request) map { (response) =>
       if (response.failed) {
         response.response match {
-          case exception: Exception =>
+          case exception: Exception => {
             throw exception
-          case r =>
+          }
+          case r => {
             throw new RpcException(
               s"response is marked as failed but response is not exception but ${r.getClass}"
             )
+          }
         }
       }
 

@@ -26,6 +26,8 @@ trait TestService {
   def sum(first: Point, second: Point): Point
   def sum(first: Int, second: Int): Int
   def raise(): Int
+  def doWork(): String
+  def notify(msg: String): Unit
   def next(n: Number): Number
 }
 
@@ -39,6 +41,10 @@ class TestServiceImpl extends TestService {
   def sum(first: Int, second: Int) = first+second
 
   def raise() = throw new TestException("failure")
+
+  def doWork() = "ok"
+
+  def notify(msg: String) {}
 
   def next(n: Number) = new java.lang.Long(n.longValue() +1)
 }
@@ -83,16 +89,24 @@ class ClientTest {
     assertEquals(Point(3, 3), res)
   }
 
+  @Test def testNoArgCall() {
+    assertEquals("ok", service.doWork())
+  }
+
+  @Test def testNoReturnValCall() {
+    service.notify("ok")
+  }
+
   @Test def testCallPrimitiveTypes() {
     val res = service.sum(1, 2)
     assertEquals(3, res)
   }
 
   @Test(expected = classOf[RpcException]) def testWrongServiceId() {
-    ClientProxy(client, "test-x", classOf[TestService])
+    ClientProxy(client, "test-x", classOf[TestService]).doWork()
   }
 
-  @Test(expected = classOf[TestException]) def testServerSideExcetion() {
+  @Test(expected = classOf[TestException]) def testServerSideException() {
     service.raise()
   }
 

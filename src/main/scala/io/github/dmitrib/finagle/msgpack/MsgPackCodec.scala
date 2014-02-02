@@ -44,7 +44,7 @@ case class ExceptionTransportWrapper(var exception: Exception) extends MessagePa
 case class RpcRequest(var method: String,
                       var serviceId: String,
                       var args: Seq[AnyRef],
-                      var paramTypes: Seq[Class[_]]) extends MessagePackable {
+                      var signature: Seq[Class[_]]) extends MessagePackable {
   //for msgpack serialization
   def this() = this(null, null, null, null)
 
@@ -54,8 +54,19 @@ case class RpcRequest(var method: String,
     method = u.readString()
     serviceId = u.readString()
 
-    val paramLength = u.readArrayBegin()
-    paramTypes = (0 until paramLength) map { i =>
+    signature = (0 until u.readArrayBegin()) map { i =>
+      val typeName = u.readString()
+      try {
+        Class.forName(typeName)
+      } catch {
+        case e: Exception => throw {
+          new RpcException("can't deserialize message", e)
+        }
+      }
+    }
+    u.readArrayEnd()
+
+    val argClasses = (0 until u.readArrayBegin()) map { i =>
       val typeName = u.readString()
       try {
         Class.forName(typeName)
@@ -68,7 +79,7 @@ case class RpcRequest(var method: String,
     u.readArrayEnd()
 
     u.readArrayBegin()
-    args = paramTypes map { klass =>
+    args = argClasses map { klass =>
       val value = u.read(klass.asInstanceOf[Class[AnyRef]])
       value
     }
@@ -79,8 +90,12 @@ case class RpcRequest(var method: String,
     pk.write(method)
     pk.write(serviceId)
 
-    pk.writeArrayBegin(paramTypes.size)
-    paramTypes.map(_.getName).foreach(pk.write)
+    pk.writeArrayBegin(signature.size)
+    signature.map(_.getName).foreach(pk.write)
+    pk.writeArrayEnd()
+
+    pk.writeArrayBegin(args.size)
+    args.map(_.getClass.getName).foreach(pk.write)
     pk.writeArrayEnd()
 
     pk.writeArrayBegin(args.size)
