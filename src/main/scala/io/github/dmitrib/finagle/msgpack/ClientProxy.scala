@@ -32,8 +32,8 @@ class ClientProxy(val client: Service[RpcRequest, RpcResponse],
     val responseF = client(request) map { (response) =>
       if (response.failed) {
         response.response match {
-          case exception: Exception => {
-            throw exception
+          case ExceptionTransportWrapper(e) => {
+            throw e
           }
           case r => {
             throw new RpcException(

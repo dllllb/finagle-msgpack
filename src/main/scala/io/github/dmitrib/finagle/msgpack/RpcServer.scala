@@ -3,6 +3,7 @@ package io.github.dmitrib.finagle.msgpack
 import com.twitter.finagle.Service
 import com.twitter.util.{FuturePool, Future}
 import java.util.concurrent.ExecutorService
+import java.lang.reflect.InvocationTargetException
 
 /**
  * @author Dmitri Babaev (dmitri.babaev@gmail.com)
@@ -39,6 +40,9 @@ class RpcServer(val handlers: Map[String, AnyRef],
         log.debug(s"RPC.return ${request.callId} -> $res")
         new RpcResponse(res, failed=false)
       } catch {
+        case e: InvocationTargetException => {
+          new RpcResponse(ExceptionTransportWrapper(e.getTargetException), failed=true)
+        }
         case e: Exception => {
           log.debug(s"RPC.exception ${request.callId} -> $e")
           new RpcResponse(ExceptionTransportWrapper(e), failed=true)

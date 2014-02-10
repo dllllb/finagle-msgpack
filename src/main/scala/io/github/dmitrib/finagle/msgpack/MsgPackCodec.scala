@@ -11,13 +11,18 @@ import org.msgpack.unpacker.Unpacker
 import org.msgpack.packer.Packer
 
 @Message
-case class ExceptionTransportWrapper(var exception: Exception) extends MessagePackable {
+case class ExceptionTransportWrapper(var exception: Throwable) extends MessagePackable {
   //for msgpack serialization
   def this() = this(null)
 
   def readFrom(u: Unpacker) {
     val exClassStr = u.readString()
-    val msg = u.readString()
+    val msgVal = u.readValue()
+    val msg = if (msgVal.isNilValue) {
+      null
+    } else {
+      msgVal.asRawValue().getString
+    }
 
     val exClass = try {
       Class.forName(exClassStr)
@@ -35,7 +40,7 @@ case class ExceptionTransportWrapper(var exception: Exception) extends MessagePa
   }
 
   def writeTo(pk: Packer) {
-    pk.write(exception.getClass.toString)
+    pk.write(exception.getClass.getName)
     pk.write(exception.getMessage)
   }
 }
@@ -68,20 +73,27 @@ case class RpcRequest(var method: String,
 
     val argClasses = (0 until u.readArrayBegin()) map { i =>
       val typeName = u.readString()
-      try {
-        Class.forName(typeName)
-      } catch {
-        case e: Exception => throw {
-          new RpcException("can't deserialize message", e)
+      if (typeName == "null") {
+        None
+      } else {
+        try {
+          Some(Class.forName(typeName))
+        } catch {
+          case e: Exception => throw {
+            new RpcException("can't deserialize message", e)
+          }
         }
       }
     }
     u.readArrayEnd()
 
     u.readArrayBegin()
-    args = argClasses map { klass =>
-      val value = u.read(klass.asInstanceOf[Class[AnyRef]])
-      value
+    args = argClasses map {
+      case Some(klass) => {
+        val value = u.read(klass.asInstanceOf[Class[AnyRef]])
+        value
+      }
+      case _ => null
     }
     u.readArrayEnd()
   }
@@ -95,11 +107,12 @@ case class RpcRequest(var method: String,
     pk.writeArrayEnd()
 
     pk.writeArrayBegin(args.size)
-    args.map(_.getClass.getName).foreach(pk.write)
+    args.map(Option(_).map(_.getClass.getName).getOrElse("null")).foreach(pk.write)
     pk.writeArrayEnd()
 
-    pk.writeArrayBegin(args.size)
-    args.foreach(pk.write)
+    val notNullArgs = args.filter(_ != null)
+    pk.writeArrayBegin(notNullArgs.size)
+    notNullArgs.foreach(pk.write)
     pk.writeArrayEnd()
   }
 }
@@ -111,20 +124,24 @@ case class RpcResponse(var response: AnyRef, var failed: Boolean) extends Messag
 
   def readFrom(u: Unpacker) {
     val typeName = u.readString()
-    val klass = try {
-      Class.forName(typeName)
-    } catch {
-      case e: Exception => throw {
-        new RpcException("can't deserialize message", e)
+    response = if (typeName == "null") {
+      null
+    } else {
+      val klass = try {
+        Class.forName(typeName)
+      } catch {
+        case e: Exception => throw {
+          new RpcException("can't deserialize message", e)
+        }
       }
+      u.read(klass.asInstanceOf[Class[AnyRef]])
     }
-    response = u.read(klass.asInstanceOf[Class[AnyRef]])
     failed = u.readBoolean()
   }
 
   def writeTo(pk: Packer) {
-    pk.write(response.getClass.getName)
-    pk.write(response)
+    pk.write(Option(response).map(_.getClass.getName).getOrElse("null"))
+    Option(response).foreach(pk.write)
     pk.write(failed)
   }
 }

@@ -25,13 +25,16 @@ trait AsyncTestService {
 trait TestService {
   def sum(first: Point, second: Point): Point
   def sum(first: Int, second: Int): Int
-  def raise(): Int
+  def raise(): String
+  def raiseNoMsg(): String
   def doWork(): String
   def notify(msg: String): Unit
   def next(n: Number): Number
 }
 
 class TestException(msg: String) extends RuntimeException(msg)
+
+class TestExceptionNoMsg extends RuntimeException
 
 class TestServiceImpl extends TestService {
   def sum(first: Point, second: Point) = {
@@ -40,7 +43,13 @@ class TestServiceImpl extends TestService {
 
   def sum(first: Int, second: Int) = first+second
 
-  def raise() = throw new TestException("failure")
+  def raise(): String = {
+    throw new TestException("failure")
+  }
+
+  def raiseNoMsg(): String = {
+    throw new TestExceptionNoMsg
+  }
 
   def doWork() = "ok"
 
@@ -97,6 +106,10 @@ class ClientTest {
     service.notify("ok")
   }
 
+  @Test def testNullArg() {
+    service.notify(null)
+  }
+
   @Test def testCallPrimitiveTypes() {
     val res = service.sum(1, 2)
     assertEquals(3, res)
@@ -106,8 +119,18 @@ class ClientTest {
     ClientProxy(client, "test-x", classOf[TestService]).doWork()
   }
 
-  @Test(expected = classOf[TestException]) def testServerSideException() {
-    service.raise()
+  @Test def testServerSideException() {
+    try {
+      service.raise()
+    } catch {
+      case e: TestException => {
+        assertEquals("failure", e.getMessage)
+      }
+    }
+  }
+
+  @Test(expected = classOf[TestExceptionNoMsg]) def testServerSideExceptionNoMsg() {
+    service.raiseNoMsg()
   }
 
   @Test def testAsyncCall() {
