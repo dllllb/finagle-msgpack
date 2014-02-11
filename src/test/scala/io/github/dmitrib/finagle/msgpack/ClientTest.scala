@@ -18,6 +18,12 @@ case class Point(var x: Int, var y: Int) {
   def this() = this(0, 0)
 }
 
+@Message
+case class Tags(var tags: Array[String]) {
+  //for msgpack serialization
+  def this() = this(null)
+}
+
 trait AsyncTestService {
   def sum(first: Point, second: Point): Future[Point]
 }
@@ -30,6 +36,7 @@ trait TestService {
   def doWork(): String
   def notify(msg: String): Unit
   def next(n: Number): Number
+  def combine(left: Tags, right: Tags): Tags
 }
 
 class TestException(msg: String) extends RuntimeException(msg)
@@ -56,6 +63,10 @@ class TestServiceImpl extends TestService {
   def notify(msg: String) {}
 
   def next(n: Number) = new java.lang.Long(n.longValue() +1)
+
+  def combine(left: Tags, right: Tags) = {
+    Tags(left.tags.toSet.union(right.tags.toSet).toArray)
+  }
 }
 
 object ClientTest {
@@ -143,6 +154,11 @@ class ClientTest {
   @Test def testBaseTypesInMethodDeclaration() {
     val res = service.next(new Integer(1)).longValue()
     assertEquals(2, res)
+  }
+
+  @Test def messageWithArray() {
+    val res = service.combine(Tags(Array("a", "b")), Tags(Array("b", "c")))
+    assertEquals(Array("a", "b", "c").toSet, res.tags.toSet)
   }
 
   @After def close() {
