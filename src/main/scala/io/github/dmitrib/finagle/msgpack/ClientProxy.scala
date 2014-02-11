@@ -26,8 +26,8 @@ class ClientProxy(val client: Service[RpcRequest, RpcResponse],
                   serviceId: String) extends InvocationHandler {
   def invoke(proxy: scala.Any, method: Method, args: Array[AnyRef]): AnyRef = {
     val safeArgs = Option(args).getOrElse(Array.empty)
-    val signature = method.getParameterTypes
-    val request = new RpcRequest(method.getName, serviceId, safeArgs, signature)
+    val signature = MethodSignature.generate(method)
+    val request = new RpcRequest(signature, serviceId, safeArgs)
 
     val responseF = client(request) map { (response) =>
       if (response.failed) {

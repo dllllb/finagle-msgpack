@@ -10,7 +10,7 @@ import org.junit.Assert._
 class SerializationTest {
   @Test def rpcRequestSerialization() {
     val msgpack = new MessagePack
-    val obj = new RpcRequest("op", "test", Array(new Integer(1)), Array(classOf[Integer]))
+    val obj = new RpcRequest("op", "test", Array(new Integer(1)))
     val bytes = msgpack.write(obj)
     val res = msgpack.read(bytes, classOf[RpcRequest])
     assertEquals(obj, res)

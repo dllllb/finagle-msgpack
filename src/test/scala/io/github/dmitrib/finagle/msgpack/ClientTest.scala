@@ -18,12 +18,6 @@ case class Point(var x: Int, var y: Int) {
   def this() = this(0, 0)
 }
 
-@Message
-case class Tags(var tags: Array[String]) {
-  //for msgpack serialization
-  def this() = this(null)
-}
-
 trait AsyncTestService {
   def sum(first: Point, second: Point): Future[Point]
 }
@@ -36,7 +30,7 @@ trait TestService {
   def doWork(): String
   def notify(msg: String): Unit
   def next(n: Number): Number
-  def combine(left: Tags, right: Tags): Tags
+  def combine(left: Array[String], right: Array[String]): Array[String]
 }
 
 class TestException(msg: String) extends RuntimeException(msg)
@@ -64,8 +58,8 @@ class TestServiceImpl extends TestService {
 
   def next(n: Number) = new java.lang.Long(n.longValue() +1)
 
-  def combine(left: Tags, right: Tags) = {
-    Tags(left.tags.toSet.union(right.tags.toSet).toArray)
+  def combine(left: Array[String], right: Array[String]) = {
+    left.toSet.union(right.toSet).toArray
   }
 }
 
@@ -104,33 +98,34 @@ class ClientTest {
 
   val service = ClientProxy(client, "test", classOf[TestService])
 
-  @Test def testCall() {
+  @Test def call() {
     val res = service.sum(Point(1, 1), Point(2, 2))
     assertEquals(Point(3, 3), res)
   }
 
-  @Test def testNoArgCall() {
+  @Test def noArgCall() {
     assertEquals("ok", service.doWork())
   }
 
-  @Test def testNoReturnValCall() {
+  @Test def noReturnValCall() {
     service.notify("ok")
   }
 
-  @Test def testNullArg() {
+  @Test def nullArg() {
     service.notify(null)
   }
 
-  @Test def testCallPrimitiveTypes() {
+  @Test def callPrimitiveTypes() {
     val res = service.sum(1, 2)
     assertEquals(3, res)
   }
 
-  @Test(expected = classOf[RpcException]) def testWrongServiceId() {
+  @Test(expected = classOf[RpcException])
+  def wrongServiceId() {
     ClientProxy(client, "test-x", classOf[TestService]).doWork()
   }
 
-  @Test def testServerSideException() {
+  @Test def serverSideException() {
     try {
       service.raise()
     } catch {
@@ -140,25 +135,26 @@ class ClientTest {
     }
   }
 
-  @Test(expected = classOf[TestExceptionNoMsg]) def testServerSideExceptionNoMsg() {
+  @Test(expected = classOf[TestExceptionNoMsg])
+  def serverSideExceptionNoMsg() {
     service.raiseNoMsg()
   }
 
-  @Test def testAsyncCall() {
+  @Test def asyncCall() {
     val asyncService = ClientProxy(client, "test", classOf[AsyncTestService])
     val resF = asyncService.sum(Point(1, 1), Point(2, 2))
     val res = Await.result(resF)
     assertEquals(Point(3, 3), res)
   }
 
-  @Test def testBaseTypesInMethodDeclaration() {
+  @Test def baseTypesInMethodDeclaration() {
     val res = service.next(new Integer(1)).longValue()
     assertEquals(2, res)
   }
 
-  @Test def messageWithArray() {
-    val res = service.combine(Tags(Array("a", "b")), Tags(Array("b", "c")))
-    assertEquals(Array("a", "b", "c").toSet, res.tags.toSet)
+  @Test def arrayOfStrings() {
+    val res = service.combine(Array("a", "b"), Array("b", "c"))
+    assertEquals(Array("a", "b", "c").toSet, res.toSet)
   }
 
   @After def close() {

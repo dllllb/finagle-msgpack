@@ -12,6 +12,14 @@ class RpcServer(val handlers: Map[String, AnyRef],
                 executorService: ExecutorService)
   extends Service[RpcRequest, RpcResponse] with Logging {
 
+  val handlerMethods = handlers.map { case (name, handler) =>
+    val methodsBySignature = handler.getClass.getMethods.map { m =>
+      (MethodSignature.generate(m), m)
+    }.toMap
+
+    (name, methodsBySignature)
+  }
+
   private val futurePool = FuturePool(executorService)
 
   def apply(request: RpcRequest): Future[RpcResponse] = {
@@ -25,15 +33,10 @@ class RpcServer(val handlers: Map[String, AnyRef],
           throw new RpcException(s"service with ID ${request.serviceId} does not exist")
         )
 
-        val method = try {
-          handler.getClass.getMethod(request.method, request.signature:_*)
-        } catch {
-          case e: Exception => {
-            throw new RpcException(
-              s"can't find method ${request.method} in service '${request.serviceId}'",
-              e
-            )
-          }
+        val method = handlerMethods.get(request.serviceId).flatMap(_.get(request.signature)).getOrElse {
+          throw new RpcException(
+            s"can't find method with signature '${request.signature}' in service '${request.serviceId}'"
+          )
         }
 
         val res = method.invoke(handler, request.args:_*)
