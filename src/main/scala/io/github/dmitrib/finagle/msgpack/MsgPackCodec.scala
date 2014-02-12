@@ -9,39 +9,26 @@ import org.jboss.netty.handler.codec.frame.LengthFieldBasedFrameDecoder
 import org.msgpack.annotation.Message
 import org.msgpack.unpacker.Unpacker
 import org.msgpack.packer.Packer
+import java.io.{ByteArrayInputStream, ObjectInputStream, ObjectOutputStream, ByteArrayOutputStream}
 
 @Message
-case class ExceptionTransportWrapper(var exception: Throwable) extends MessagePackable {
+case class SerializableTransportWrapper(var obj: AnyRef) extends MessagePackable {
   //for msgpack serialization
   def this() = this(null)
 
   def readFrom(u: Unpacker) {
-    val exClassStr = u.readString()
-    val msgVal = u.readValue()
-    val msg = if (msgVal.isNilValue) {
-      null
-    } else {
-      msgVal.asRawValue().getString
-    }
-
-    val exClass = try {
-      Class.forName(exClassStr)
-    } catch {
-      case e: Exception => throw {
-        new RpcException("can't deserialize message", e)
-      }
-    }
-
-    exception = (if (msg != null) {
-      exClass.getConstructor(classOf[String]).newInstance(msg)
-    } else {
-      exClass.newInstance()
-    }).asInstanceOf[Exception]
+    val bar = u.readByteArray()
+    val bais = new ByteArrayInputStream(bar)
+    val ois = new ObjectInputStream(bais)
+    obj = ois.readObject()
   }
 
   def writeTo(pk: Packer) {
-    pk.write(exception.getClass.getName)
-    pk.write(exception.getMessage)
+    val baos = new ByteArrayOutputStream
+    val oos = new ObjectOutputStream(baos)
+    oos.writeObject(obj)
+    val bar = baos.toByteArray
+    pk.write(bar)
   }
 }
 

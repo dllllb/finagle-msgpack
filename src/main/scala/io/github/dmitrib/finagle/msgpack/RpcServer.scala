@@ -44,11 +44,11 @@ class RpcServer(val handlers: Map[String, AnyRef],
         new RpcResponse(res, failed=false)
       } catch {
         case e: InvocationTargetException => {
-          new RpcResponse(ExceptionTransportWrapper(e.getTargetException), failed=true)
+          new RpcResponse(SerializableTransportWrapper(e.getTargetException), failed=true)
         }
         case e: Exception => {
           log.debug(s"RPC.exception ${request.callId} -> $e")
-          new RpcResponse(ExceptionTransportWrapper(e), failed=true)
+          new RpcResponse(SerializableTransportWrapper(e), failed=true)
         }
       }
     }

@@ -32,7 +32,7 @@ class ClientProxy(val client: Service[RpcRequest, RpcResponse],
     val responseF = client(request) map { (response) =>
       if (response.failed) {
         response.response match {
-          case ExceptionTransportWrapper(e) => {
+          case SerializableTransportWrapper(e: Throwable) => {
             throw e
           }
           case r => {
